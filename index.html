@@ -6,28 +6,9 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <link rel="apple-touch-icon" id="appIcon">
-  <link rel="icon" id="favicon">
+  <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/2489/2489756.png">
+  <link rel="icon" href="https://cdn-icons-png.flaticon.com/512/2489/2489756.png">
   <title>자산 관리</title>
-  <script>
-  // PWA 아이콘 동적 생성
-  (function(){
-    const size=180,c=document.createElement('canvas');
-    c.width=c.height=size;
-    const ctx=c.getContext('2d');
-    ctx.fillStyle='#1e293b';
-    ctx.beginPath();
-    ctx.roundRect(0,0,size,size,32);
-    ctx.fill();
-    ctx.font='100px serif';
-    ctx.textAlign='center';
-    ctx.textBaseline='middle';
-    ctx.fillText('💰',size/2,size/2+8);
-    const url=c.toDataURL('image/png');
-    document.getElementById('appIcon')?.setAttribute('href',url);
-    document.getElementById('favicon')?.setAttribute('href',url);
-  })();
-  </script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
@@ -41,6 +22,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .app{display:flex;flex-direction:column;height:100%;padding-top:env(safe-area-inset-top)}
 .hdr{padding:10px 12px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--brd);background:var(--card)}
 .hdr h1{font-size:1rem}
+.hdr-right{display:flex;align-items:center;gap:6px}
 .hdr-user{display:flex;align-items:center;gap:8px}
 .hdr-user img{width:28px;height:28px;border-radius:50%}
 .hdr-user span{font-size:11px;color:var(--muted);max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -58,7 +40,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .btn-w{background:var(--warn);color:#000}
 .btn-sm{padding:6px 10px;font-size:11px}
 .btn-xs{padding:4px 8px;font-size:10px}
-.btn-ic{padding:6px;min-width:36px;min-height:36px;border-radius:8px}
+.btn-ic{padding:6px;min-width:32px;min-height:32px;border-radius:8px;font-size:14px}
 .card{background:var(--card);border-radius:12px;padding:12px;border:1px solid var(--brd);margin-bottom:10px}
 .card-t{font-size:13px;font-weight:600;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center}
 .g4{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin-bottom:10px}
@@ -157,6 +139,10 @@ input:focus,select:focus{border-color:var(--pri);outline:none}
 .loading{display:flex;align-items:center;justify-content:center;height:100%;flex-direction:column;gap:12px}
 .spinner{width:32px;height:32px;border:3px solid var(--brd);border-top-color:var(--pri);border-radius:50%;animation:spin 1s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
+.help-section{margin-bottom:16px}
+.help-section h4{font-size:13px;font-weight:600;color:var(--pri);margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.help-item{background:var(--bg);border-radius:8px;padding:10px;margin-bottom:6px;font-size:11px;line-height:1.6}
+.help-item strong{color:var(--pri)}
 @media(min-width:480px){.g4{grid-template-columns:repeat(4,1fr)}}
   </style>
 </head>
@@ -164,17 +150,17 @@ input:focus,select:focus{border-color:var(--pri);outline:none}
 <div class="app">
   <header class="hdr">
     <h1>💰 자산 관리</h1>
-    <div id="hdrRight"></div>
+    <div class="hdr-right" id="hdrRight"></div>
   </header>
   <main class="cnt" id="cnt"></main>
   <nav class="bnav" id="bnav" style="display:none"></nav>
 </div>
 <div class="mo" id="mo"><div class="md" id="md"></div></div>
+<div class="mo" id="helpMo"><div class="md" id="helpMd"></div></div>
 <div class="toast" id="toast"></div>
 <canvas class="conf" id="conf"></canvas>
 
 <script>
-// ==================== Firebase 설정 ====================
 const firebaseConfig = {
   apiKey: "AIzaSyBx5XJtU0fq_JC4A327tQoNgqgbswx08-w",
   authDomain: "wealth-check-ca82e.firebaseapp.com",
@@ -188,7 +174,9 @@ firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
 
-// ==================== 상수 & 상태 ====================
+// 로그인 유지 설정 (LOCAL = 브라우저 닫아도 유지)
+auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+
 const $=id=>document.getElementById(id),
 $$=s=>[...document.querySelectorAll(s)],
 LS_KEY='WealthData',
@@ -197,7 +185,6 @@ DEF={assets:[],income:[],expense:[],fixedIncome:[],fixedExpense:[],goals:[],loan
 let D={...DEF},currentUser=null,syncStatus='ok',chart=null,trend=null,undoData=null,expandedLoans=new Set(),
 state={tab:'dash',aTab:'list',gTab:'goals',tTab:'all',trendView:'month',flowMonth:gTM(),assetSort:'order',assetFilter:'all',goalSort:'order',loanSort:'order'};
 
-// ==================== 유틸리티 ====================
 function gTM(){const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;}
 function gML(){return new Date().getMonth()+1+'월';}
 function fmt(n){return new Intl.NumberFormat('ko-KR').format(n);}
@@ -213,7 +200,6 @@ function remainMonth(e){if(!e)return 0;const n=new Date(),ed=new Date(e+'-01');r
 function isMatured(e){return e&&new Date()>=new Date(e+'-01');}
 function adjMonth(m,delta){const[y,mo]=m.split('-').map(Number),d=new Date(y,mo-1+delta);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;}
 
-// ==================== 저장/로드 (Firebase + localStorage) ====================
 let saveTimeout=null;
 
 async function saveToFirestore(){
@@ -276,7 +262,6 @@ function updateSyncUI(){
   }
 }
 
-// ==================== Auth ====================
 function showLoading(){
   $('cnt').innerHTML=`<div class="loading"><div class="spinner"></div><span style="color:var(--muted);font-size:12px">로딩 중...</span></div>`;
 }
@@ -313,16 +298,98 @@ function showApp(){
   const displayName=currentUser?.displayName||currentUser?.email||'';
   $('hdrRight').innerHTML=`
     <span id="syncStatus" class="sync-status sync-ok">✓ 동기화됨</span>
+    <button class="btn btn-ic btn-o" id="btnHelp">❓</button>
     <div class="hdr-user">
       ${photoURL?`<img src="${photoURL}" alt="">`:''}
       <span>${displayName.split(' ')[0]}</span>
     </div>
     <button class="btn btn-ic btn-o" id="btnTh">🌓</button>`;
   $('btnTh').onclick=()=>{document.body.classList.toggle('light');localStorage.setItem('theme',isL()?'light':'dark');rnd();};
+  $('btnHelp').onclick=openHelp;
   rnd();
 }
 
-// Auth 상태 감지
+function openHelp(){
+  $('helpMd').innerHTML=`
+    <div class="md-h"></div>
+    <h3>📖 도움말</h3>
+    
+    <div class="help-section">
+      <h4>📊 대시보드</h4>
+      <div class="help-item">
+        <strong>총자산/순자산:</strong> 전체 자산 합계와 대출을 뺀 순자산을 보여줍니다.<br>
+        <strong>적금/대출:</strong> 이번 달 입금/상환 완료 현황입니다.<br>
+        <strong>📸 버튼:</strong> 현재 자산 상태를 월별 기록으로 저장합니다.
+      </div>
+    </div>
+    
+    <div class="help-section">
+      <h4>💰 자산 관리</h4>
+      <div class="help-item">
+        <strong>자산 추가:</strong> 예금, 적금, 투자, 부동산 등 다양한 자산을 등록하세요.<br>
+        <strong>매월 변동:</strong> 적금처럼 매월 입금하는 금액을 설정하면 💰 버튼으로 입금 기록이 가능합니다.<br>
+        <strong>만기일:</strong> 설정하면 만기 시 🎊 버튼으로 현금 전환됩니다.<br>
+        <strong>목표 연동:</strong> 자산을 목표에 연결하면 입금 시 목표 금액도 자동 증가합니다.
+      </div>
+    </div>
+    
+    <div class="help-section">
+      <h4>💸 수입/지출</h4>
+      <div class="help-item">
+        <strong>수입/지출 탭:</strong> 월별 수입과 지출을 기록합니다.<br>
+        <strong>고정 탭:</strong> 매월 반복되는 급여, 구독료 등을 등록하세요.<br>
+        <strong>📌고정 버튼:</strong> 해당 월에 고정 수입/지출을 일괄 반영합니다.<br>
+        <strong>자산 연결:</strong> 고정 항목에 자산을 연결하면 반영 시 잔액이 자동 변동됩니다.
+      </div>
+    </div>
+    
+    <div class="help-section">
+      <h4>🎯 목표</h4>
+      <div class="help-item">
+        <strong>목표 설정:</strong> 저축 목표를 설정하고 진행률을 추적하세요.<br>
+        <strong>자산 연동:</strong> 자산에서 목표를 연결하면 해당 자산의 잔액이 목표에 자동 반영됩니다.<br>
+        <strong>직접 추가:</strong> 연동 자산 외에 수동으로 금액을 추가할 수 있습니다.
+      </div>
+    </div>
+    
+    <div class="help-section">
+      <h4>🏦 대출</h4>
+      <div class="help-item">
+        <strong>상환방식:</strong><br>
+        • 원리금균등: 매월 동일 금액(원금+이자) 상환<br>
+        • 원금균등: 원금은 동일, 이자는 점차 감소<br>
+        • 만기일시: 매월 이자만, 만기에 원금 일시상환<br>
+        <strong>💸 버튼:</strong> 이번 달 상환을 기록합니다.<br>
+        <strong>취소:</strong> 잘못 기록한 상환은 취소할 수 있습니다.
+      </div>
+    </div>
+    
+    <div class="help-section">
+      <h4>✅ 할일</h4>
+      <div class="help-item">
+        금융 관련 할일을 메모하고 관리하세요.<br>
+        체크하면 완료 처리되고, 완료된 항목은 일괄 정리할 수 있습니다.
+      </div>
+    </div>
+    
+    <div class="help-section">
+      <h4>⚙️ 설정</h4>
+      <div class="help-item">
+        <strong>테마:</strong> 다크/라이트 모드를 선택하세요.<br>
+        <strong>내보내기:</strong> 데이터를 JSON 파일로 백업합니다.<br>
+        <strong>가져오기:</strong> 백업 파일에서 데이터를 복원합니다.<br>
+        <strong>동기화:</strong> Google 계정으로 로그인하면 모든 기기에서 데이터가 자동 동기화됩니다.
+      </div>
+    </div>
+    
+    <div class="md-btns">
+      <button class="btn btn-p" id="closeHelp">확인</button>
+    </div>`;
+  $('helpMo').classList.add('act');
+  $('closeHelp').onclick=()=>$('helpMo').classList.remove('act');
+  $('helpMo').onclick=e=>{if(e.target===e.currentTarget)$('helpMo').classList.remove('act');};
+}
+
 auth.onAuthStateChanged(async user=>{
   currentUser=user;
   if(user){
@@ -335,7 +402,6 @@ auth.onAuthStateChanged(async user=>{
   }
 });
 
-// ==================== 토스트 ====================
 function toast(m,i='💾',undo=false){
   $('toast').innerHTML=`<span>${i}</span> ${m}${undo?'<span class="hist-b" onclick="doUndo()">되돌리기</span>':''}`;
   $('toast').classList.add('show');
@@ -344,7 +410,6 @@ function toast(m,i='💾',undo=false){
 function setUndo(data,msg){undoData=data;toast(msg,'🗑️',true);}
 function doUndo(){if(undoData){D=undoData;sv();rnd();toast('되돌림 완료','↩️');undoData=null;}}
 
-// ==================== 계산 ====================
 function calcLoan(P,rate,months,type,rem,remM){
   if(!P||!months)return{mp:0,mi:0};
   const r=rate/100/12,p=rem??P,n=remM||months;
@@ -377,7 +442,6 @@ function getLinked(gid){return gid?D.assets.filter(a=>a.goalId===gid):[];}
 function updateGoal(gid,amt){const g=D.goals.find(x=>x.id===Number(gid));if(g){const prev=g.current||0;g.current=Math.max(0,prev+amt);if(prev<g.target&&g.current>=g.target)setTimeout(celebrate,300);}}
 function addHist(type,name,amount,action,tid){D.history.unshift({id:genId(),date:localDate()+'T'+new Date().toTimeString().slice(0,8),type,name,amount,action,targetId:tid||null});if(D.history.length>200)D.history.pop();}
 
-// ==================== 액션 ====================
 const actions={
   dep(id){const a=D.assets.find(x=>x.id===id),tm=gTM(),amt=a?.monthlyChange||0;if(!a||a.lastDeposit===tm)return toast('이미 완료!','⚠️');if(!confirm(`${a.name}에 ${fmtS(amt)} 입금?`))return;a.amount+=amt;a.lastDeposit=tm;D.expense.push({id:genId(),name:`저축:${a.name}`,amount:amt,targetId:id,auto:true,month:tm});addHist('deposit',a.name,amt,'입금',id);if(a.goalId)updateGoal(a.goalId,amt);sv();rnd();toast(`${fmtS(amt)} 입금!`,'💰');},
   cdep(id){const a=D.assets.find(x=>x.id===id),dm=a?.lastDeposit;if(!dm)return toast('취소 불가','⚠️');const h=D.history.find(x=>x.type==='deposit'&&x.targetId===id&&x.date?.startsWith(dm));if(!h||!confirm(`${a.name} 입금 취소?`))return;a.amount-=h.amount;D.expense=D.expense.filter(e=>!(e.targetId===id&&e.month===dm&&e.auto));D.history=D.history.filter(x=>x.id!==h.id);const prev=D.history.filter(x=>x.type==='deposit'&&x.targetId===id).sort((a,b)=>b.date.localeCompare(a.date))[0];a.lastDeposit=prev?.date.slice(0,7)||null;if(a.goalId)updateGoal(a.goalId,-h.amount);sv();rnd();toast('입금 취소','↩️');},
@@ -393,7 +457,6 @@ const actions={
 
 function celebrate(){const cv=$('conf'),ctx=cv.getContext('2d');cv.width=innerWidth;cv.height=innerHeight;const ps=[];for(let i=0;i<100;i++)ps.push({x:cv.width/2,y:cv.height/2,vx:(Math.random()-.5)*15,vy:(Math.random()-.5)*15-5,c:gc()[i%5],sz:Math.random()*8+4,l:1});(function ani(){ctx.clearRect(0,0,cv.width,cv.height);let alive=false;ps.forEach(p=>{if(p.l<=0)return;alive=true;p.x+=p.vx;p.y+=p.vy;p.vy+=.3;p.l-=.015;ctx.globalAlpha=p.l;ctx.fillStyle=p.c;ctx.beginPath();ctx.arc(p.x,p.y,p.sz,0,Math.PI*2);ctx.fill();});if(alive)requestAnimationFrame(ani);else ctx.clearRect(0,0,cv.width,cv.height);})();}
 
-// ==================== 렌더링 헬퍼 ====================
 const h={
   stat:(l,v,s,cls='')=>`<div class="stat ${cls}"><div class="stat-l">${l}</div><div class="stat-v">${v}</div>${s?`<div class="stat-s">${s}</div>`:''}</div>`,
   tabs:(items,cur,key)=>items.map(([k,v])=>`<button class="tab ${cur===k?'act':''}" data-${key}="${k}">${v}</button>`).join(''),
@@ -402,7 +465,6 @@ const h={
   empty:(ico,t,btn)=>`<div class="no-item">${ico?`<div style="font-size:40px;margin-bottom:10px">${ico}</div>`:''}${t}${btn||''}</div>`
 };
 
-// ==================== 렌더러 ====================
 const renders={
   dash(){
     const m=calcMonthly(),ml=gML(),pending=[],todos=D.todos.filter(t=>!t.done).slice(0,3);
@@ -463,11 +525,10 @@ const renders={
     return`<div class="tabs">${h.tabs([['all','전체 ('+D.todos.length+')'],['active','진행 ('+ac+')'],['done','완료 ('+dc+')']],tTab,'tt')}</div><div class="card"><div class="card-t">할일 관리</div><div class="todo-input"><input type="text" id="todoInput" placeholder="새 할일 입력..." maxlength="100"><button class="btn btn-p btn-sm" id="btnAddTodo">추가</button></div>${todos.length?todos.map(t=>`<div class="todo-item ${t.done?'done':''}"><div class="todo-check ${t.done?'checked':''}" data-tog="${t.id}">${t.done?'✓':''}</div><div style="flex:1"><div class="todo-text">${t.text}</div></div><button class="todo-del" data-dtodo="${t.id}">🗑️</button></div>`).join(''):`<div class="no-item">${tTab==='done'?'완료된 할일 없음':tTab==='active'?'모두 완료! 🎉':'할일을 추가해보세요'}</div>`}</div>${dc>0?`<div class="card" style="padding:8px 12px;display:flex;justify-content:space-between"><span style="font-size:11px;color:var(--muted)">완료 ${dc}개</span><button class="btn btn-xs btn-o" id="btnClearDone">정리</button></div>`:''}`;
   },
   set(){
-    return`<div class="set-card"><h4>👤 계정</h4><div class="set-row"><span style="font-size:12px">${currentUser?.email||''}</span><button class="btn btn-o btn-xs" id="btnLogout">로그아웃</button></div></div><div class="set-card"><h4>🎨 테마</h4><div style="display:flex;gap:8px;margin-top:6px"><button class="btn btn-sm ${!isL()?'btn-p':'btn-o'}" id="thD">🌙 다크</button><button class="btn btn-sm ${isL()?'btn-p':'btn-o'}" id="thL">☀️ 라이트</button></div></div><div class="set-card"><h4>💾 데이터</h4><div class="set-row"><span style="font-size:12px">내보내기</span><button class="btn btn-o btn-xs" id="btnExp">📤</button></div><div class="set-row"><span style="font-size:12px">가져오기</span><label class="btn btn-o btn-xs">📥<input type="file" accept=".json" id="fImp" hidden></label></div><div class="set-row"><span style="font-size:12px;color:var(--dan)">초기화</span><button class="btn btn-d btn-xs" id="btnRst">🗑️</button></div><div class="set-desc">☁️ 데이터는 Google 계정에 자동 동기화됩니다</div></div><div class="set-card"><h4>ℹ️ 정보</h4><div class="set-row"><span style="font-size:12px">버전</span><span style="color:var(--muted);font-size:11px">v1.0</span></div></div>`;
+    return`<div class="set-card"><h4>👤 계정</h4><div class="set-row"><span style="font-size:12px">${currentUser?.email||''}</span><button class="btn btn-o btn-xs" id="btnLogout">로그아웃</button></div></div><div class="set-card"><h4>🎨 테마</h4><div style="display:flex;gap:8px;margin-top:6px"><button class="btn btn-sm ${!isL()?'btn-p':'btn-o'}" id="thD">🌙 다크</button><button class="btn btn-sm ${isL()?'btn-p':'btn-o'}" id="thL">☀️ 라이트</button></div></div><div class="set-card"><h4>💾 데이터</h4><div class="set-row"><span style="font-size:12px">내보내기</span><button class="btn btn-o btn-xs" id="btnExp">📤</button></div><div class="set-row"><span style="font-size:12px">가져오기</span><label class="btn btn-o btn-xs">📥<input type="file" accept=".json" id="fImp" hidden></label></div><div class="set-row"><span style="font-size:12px;color:var(--dan)">초기화</span><button class="btn btn-d btn-xs" id="btnRst">🗑️</button></div><div class="set-desc">☁️ 데이터는 Google 계정에 자동 동기화됩니다</div></div><div class="set-card"><h4>ℹ️ 정보</h4><div class="set-row"><span style="font-size:12px">버전</span><span style="color:var(--muted);font-size:11px">v1.1</span></div></div>`;
   }
 };
 
-// ==================== 메인 렌더 ====================
 function rnd(){
   $('cnt').innerHTML=renders[state.tab]();
   bindEv();
@@ -478,7 +539,6 @@ function rChart(){const ctx=$('aChart');if(!ctx)return;if(chart)chart.destroy();
 
 function rTrend(){const ctx=$('tChart');if(!ctx)return;if(trend)trend.destroy();const all=Object.entries(D.monthlyRecords).sort((a,b)=>a[0].localeCompare(b[0]));let labels=[],vals=[];if(state.trendView==='year'){const byY={};all.forEach(([m,r])=>{byY[m.slice(0,4)]=r.totalAsset||0;});const yrs=Object.keys(byY).sort();if(yrs.length<2)return;labels=yrs.map(y=>y+'년');vals=yrs.map(y=>byY[y]);}else{const recs=all.slice(-12);if(recs.length<2){ctx.parentElement.innerHTML='<div class="no-item">📸 버튼으로 기록 저장</div>';return;}labels=recs.map(([m])=>m.slice(2).replace('-','.'));vals=recs.map(([,r])=>r.totalAsset||0);}trend=new Chart(ctx,{type:'line',data:{labels,datasets:[{data:vals,borderColor:gpc('pri'),backgroundColor:gpc('pri')+'33',fill:true,tension:.4,pointRadius:3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{color:'#94a3b8',font:{size:9}}},y:{grid:{color:'#334155'},ticks:{color:'#94a3b8',font:{size:9},callback:v=>fmtS(v)}}}}});}
 
-// ==================== 이벤트 바인딩 ====================
 function bindEv(){
   const on=(sel,fn)=>$$(sel).forEach(el=>el.onclick=e=>fn(el,e));
   on('[data-at]',el=>{state.aTab=el.dataset.at;rnd();});
@@ -528,7 +588,6 @@ function bindEv(){
 
 function addTodo(){const inp=$('todoInput');if(!inp?.value.trim())return toast('내용 입력!','⚠️');D.todos.unshift({id:genId(),text:inp.value.trim(),done:false,date:localDate()});inp.value='';sv();rnd();toast('할일 추가됨','✅');}
 
-// ==================== 모달 ====================
 function openM(type,id){
   const arr={fixedIncome:D.fixedIncome,fixedExpense:D.fixedExpense,income:D.income,expense:D.expense}[type]||D[type+'s'];
   const item=id?arr?.find(x=>x.id===id):null;
@@ -607,7 +666,6 @@ function delItem(type,id){
   sv();rnd();
 }
 
-// ==================== 초기화 ====================
 const th=localStorage.getItem('theme');
 if(th==='light'||(th!=='dark'&&matchMedia('(prefers-color-scheme:light)').matches))document.body.classList.add('light');
 showLoading();
